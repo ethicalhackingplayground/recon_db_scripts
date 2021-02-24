@@ -56,36 +56,17 @@ if [[ -z $1 ]] ; then
         exit
 fi
 
-# append $1 to a1
-cat $1 | grep -Ev "access.telenet.be|github|myshopify|shopify|facebook|google|microsoft|aliyun|amazoncl
-oud|huaweicloud" >> a1  
+cat $1 | grep -vE "access.telenet|github|myshopify|shopify|facebook|google|microsoft|aliyun|amazoncloud|stanford.edu|huaweicloud" >> o1
+mysql recondb -e "select * from subdomains" | awk '{print $2}' | grep -v "data" >> o
 
-# append db out to b
-mysql recondb -e "select * from subdomains" | awk '{print $2}'  >> b1
-
-# remove db duplicates and output it to file db
-awk 'NR==FNR{a[FNR]=$0;next}$0!=a[FNR]{print}' a1 b1 >> db1
-
-if [[ -z $(grep '[^[:space:]]' db1) ]] ; then
-
-        cat a1 | while read line
-        do
-        mysql recondb -e "insert into subdomains(data) values ('$line')"
-        done
-else
-
-
-        # Insert uniq sundomains into db
-        cat db1 | while read line
-        do
-                mysql recondb -e "insert into subdomains(data) values ('$line')"
-        done
-fi
-
-# clean up
-rm a1
-rm b1
-rm db1
+paste -d@ o o1 | while IFS="@" read -r f1 f2
+do
+        if [[ "$f2" != "$f1" ]]; then
+                mysql recondb -e "insert ignore into subdomains (data) values('$f2')"
+        fi
+done
+rm o
+rm o1
 ```
 
 
@@ -98,38 +79,17 @@ if [[ -z $1 ]] ; then
         exit
 fi
 
+cat $1 | grep -vE "access.telenet|github|myshopify|shopify|facebook|google|microsoft|aliyun|amazoncloud|stanford.edu|huaweicloud" >> o1
+mysql recondb -e "select * from resolved" | awk '{print $2}' | grep -v "data" >> o
 
-# append $1 to a2
-cat $1 | grep -Ev "access.telenet.be|github|myshopify|shopify|facebook|google|microsoft|aliyun|amazoncl
-oud|huaweicloud" >> a2
-
-# append db out to b2
-mysql recondb -e "select * from resolved" | awk '{print $2}'  >> b2
-
-# remove db duplicates and output it to file db
-awk 'NR==FNR{a[FNR]=$0;next}$0!=a[FNR]{print}' a2 b2 >> db2
-
-if [[ -z $(grep '[^[:space:]]' db2) ]] ; then
-
-        cat a2 | while read line
-        do
-
-        mysql recondb -e "insert into resolved(data) values ('$line')"
-        done
-else
-
-
-        # Insert uniq sundomains into db
-        cat db2 | while read line
-        do
-                mysql recondb -e "insert into resolved(data) values ('$line')"
-        done
-fi
-
-# clean up
-rm a2
-rm b2
-rm db2
+paste -d@ o o1 | while IFS="@" read -r f1 f2
+do
+        if [[ "$f2" != "$f1" ]]; then
+                mysql recondb -e "insert ignore into resolved (data) values('$f2')"
+        fi
+done
+rm o
+rm o1
 ```
 
 ```bash
@@ -165,7 +125,40 @@ cat /root/recon/chaos/chaos.txt | rev | cut -d '.' -f1,2 | rev | sort -u >> /roo
 ```bash
 subfinder -dL /root/recon/chaos/roots.txt -silent >> new.txt
 ./insert_subs.sh new.txt
+cat new.txt | httpx -silent >> resolved.txt
+./insert_resolved.sh resolved.txt
 ```
+
+***nano run_attacks.sh***
+
+```bash
+
+#Insert new data into the database
+
+if [[ -z $1 ]]; then
+echo "Usage: "
+echo "    ./run_attack.sh resolved"
+echo "    ./run_attack.sh subdomains"
+exit
+fi
+
+if [[ "$1" != "subdomains" ]] && [[ "$1" != "resolved" ]]; then
+        exit
+fi
+
+# Run attacks all the time
+while true; do
+        # Kill all jobs first
+        jobs -p | grep "nuclei" | xargs -n1 pkill -SIGINT -g
+        mysql recondb -e "select * from $1" | awk '{print $2}' | nuclei -t /root/nuclei-templates/ -severity critical,high -exclude takeovers -c 200 | notify -silent
+done
+```
+
+#### Run the attacks in the background
+
+```bash
+chmod +x run_attacks.sh; ./run_attacks.sh &
+````
 
 ### Creating Cron Rules
 
