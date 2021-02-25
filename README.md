@@ -49,13 +49,13 @@ mkdir recontest
 ***nano insert_subs.sh***
 ```bash
 
-#Insert new data into the database
 
-if [[ -z $1 ]] ; then
-        echo "Usage: file to insert into database"
+#!/bin/bash
+
+if [[ -z $1 ]]; then
+        echo "Usage: ./insert_subs.sh newfile"
         exit
 fi
-
 cat $1 | grep -vE "access.telenet|github|myshopify|shopify|facebook|google|microsoft|aliyun|amazoncloud|stanford.edu|huaweicloud" >> o1
 mysql recondb -e "select * from subdomains" | awk '{print $2}' | grep -v "data" >> o
 
@@ -72,40 +72,24 @@ rm o1
 
 ***nano insert_resolved.sh***
 ```bash
-#Insert new data into the database
 
-if [[ -z $1 ]] ; then
-        echo "Usage: file to insert into database"
+#!/bin/bash
+
+if [[ -z $1 ]]; then
+        echo "Usage: ./insert_resolved.sh newfile"
         exit
 fi
+cat $1 | grep -vE "access.telenet|github|myshopify|shopify|facebook|google|microsoft|aliyun|amazoncloud|stanford.edu|huaweicloud" >> o3
+mysql recondb -e "select * from resolved" | awk '{print $2}' | grep -v "data" >> o2
 
-cat $1 | grep -vE "access.telenet|github|myshopify|shopify|facebook|google|microsoft|aliyun|amazoncloud|stanford.edu|huaweicloud" >> o1
-mysql recondb -e "select * from resolved" | awk '{print $2}' | grep -v "data" >> o
-
-paste -d@ o o1 | while IFS="@" read -r f1 f2
+paste -d@ o2 o3 | while IFS="@" read -r f1 f2
 do
         if [[ "$f2" != "$f1" ]]; then
                 mysql recondb -e "insert ignore into resolved (data) values('$f2')"
         fi
 done
-rm o
-rm o1
-```
-
-```bash
-#Insert new data into the database
-
-if [[ -z $1 ]]; then
-echo "Usage: "
-echo "    ./run_attack.sh resolved"
-echo "    ./run_attack.sh subdomains"
-exit
-fi
-
-if [[ "$1" != "subdomains" ]] && [[ "$1" != "resolved" ]]; then
-        exit
-fi
-mysql recondb -e "select * from $1" | awk '{print $2}' | sort -u
+rm o2
+rm o3
 ```
 
 ### Download All Subdomains From Chaos
